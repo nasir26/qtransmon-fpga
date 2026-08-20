@@ -1,0 +1,33 @@
+{
+  "generated_at_utc": "2026-08-20T05:40:14.246288+00:00",
+  "config": {
+    "N": 32,
+    "w01_rad_s": 31415926535.89793,
+    "dt_s": 1e-12,
+    "n_steps": 10000
+  },
+  "note": "Infidelity is from a Python bit-rounding emulation of the free-evolution phase-rotation recurrence (CLAUDE.md section 3 fact 1), not the RTL cosim (that is V5/M2). DSP/LUT/f_max are not measured here; they require Vivado synthesis.",
+  "results": [
+    {
+      "format": "Q1.15",
+      "int_bits": 1,
+      "frac_bits": 15,
+      "n_steps": 10000,
+      "infidelity": 0.005391123707006451
+    },
+    {
+      "format": "Q2.14",
+      "int_bits": 2,
+      "frac_bits": 14,
+      "n_steps": 10000,
+      "infidelity": 0.04170220060261143
+    },
+    {
+      "format": "Q4.12",
+      "int_bits": 4,
+      "frac_bits": 12,
+      "n_steps": 10000,
+      "infidelity": 0.4975080363272917
+    }
+  ]
+}

@@ -255,7 +255,15 @@ constant in the bitstream is disconnected from a physical parameter.
 
 Amplitudes are stored in a parameterised fixed-point format, swept over Q1.15, Q2.14 and
 Q4.12. Table~\ref{tab:fixedpoint} reports accumulated infidelity against the double
-precision golden model together with the resource cost of each choice.
+precision golden model, from a rounding-accurate Python emulation of the per-step
+phase-rotation recurrence (\texttt{bench/quantization/sweep\_precision.py}, M1; log
+committed at \texttt{bench/quantization/results\_quantization\_sweep.json}). This
+software emulation is not a substitute for the RTL cosim (V5, M2); resource cost and
+$f_{\max}$ are synthesis results and remain TBD until M2 runs through Vivado.
+Notably, even Q1.15 accumulates $O(10^{-3})$ infidelity by $10^4$ steps because the
+ROM-quantized rotator carries a small systematic per-step angular error that compounds
+linearly with step count — Q4.12 accumulates enough phase drift to be unusable at this
+horizon, which argues against using it in M2 without periodic phase resynchronisation.
 
 \begin{table}[t]
 \caption{Fixed-point format against accumulated infidelity and resource cost,
@@ -265,9 +273,9 @@ $N = 32$, $10^4$ steps.}
 \toprule
 Format & Infidelity & DSP & LUT & $f_{\max}$ (MHz) \\
 \midrule
-Q1.15 & TBD & TBD & TBD & TBD \\
-Q2.14 & TBD & TBD & TBD & TBD \\
-Q4.12 & TBD & TBD & TBD & TBD \\
+Q1.15 & $5.39\times10^{-3}$ & TBD & TBD & TBD \\
+Q2.14 & $4.17\times10^{-2}$ & TBD & TBD & TBD \\
+Q4.12 & $4.98\times10^{-1}$ & TBD & TBD & TBD \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -376,7 +384,10 @@ encoding overhead of the circuit route is expected to be repaid.
 
 \subsection{Validation}
 
-Table~\ref{tab:validation} lists the acceptance gates and their status.
+Table~\ref{tab:validation} lists the acceptance gates and their status. V1-V4 (the M0
+golden model) pass under \texttt{physics/tests/}; V5 onward require the RTL/hardware
+toolchain (Vivado xsim, and eventually the Alveo U55C itself), which was not available
+in the environment this manuscript was drafted in, and remain TBD rather than estimated.
 
 \begin{table}[t]
 \caption{Validation gates.}
@@ -385,10 +396,10 @@ Table~\ref{tab:validation} lists the acceptance gates and their status.
 \toprule
 Gate & Criterion & Status \\
 \midrule
-V1  & Spectrum matches $\hbar\omega_{01}(n+\tfrac12)$ to $10^{-10}$ & TBD \\
-V2  & Free evolution preserves Fock populations exactly & TBD \\
-V3  & Coherent state follows the classical trajectory, $Q_M = 0$ & TBD \\
-V4  & Resonant drive gives $|\alpha(t)| = \Omega t/2$ & TBD \\
+V1  & Spectrum matches $\hbar\omega_{01}(n+\tfrac12)$ to $10^{-10}$ & PASS \\
+V2  & Free evolution preserves Fock populations exactly & PASS \\
+V3  & Coherent state follows the classical trajectory, $Q_M = 0$ & PASS \\
+V4  & Resonant drive gives $|\alpha(t)| = \Omega t/2$ & PASS \\
 V5  & RTL against golden, infidelity $< 10^{-4}$ at $10^4$ steps & TBD \\
 V6  & Surrogate infidelity $< 10^{-3}$ on held-out trajectories & TBD \\
 V8  & Encoded free evolution exact to FP64 & TBD \\

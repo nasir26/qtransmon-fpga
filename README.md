@@ -34,9 +34,12 @@ No benchmark or fidelity results have been produced yet. Every table in `bench/`
 every results cell in `paper/` is marked `TBD` until a run actually produces the number.
 See `CLAUDE.md` section 10.
 
-Milestones: see `CLAUDE.md` section 5. Current: **M0 passing** (`lc` mode golden model,
-V1-V4 green under `physics/tests/`; `transmon`/`duffing` remain gated to M11). Next: M1
-(fixed-point Python model, Q-format sweep).
+Milestones: see `CLAUDE.md` section 5. Current: **M1 passing** (`lc` mode golden model,
+V1-V4 green under `physics/tests/`, plus a Q1.15/Q2.14/Q4.12 fixed-point infidelity
+sweep at `bench/quantization/`; `transmon`/`duffing` remain gated to M11). **M2 onward
+is blocked**: it needs Vivado/Vitis (RTL cosim, V5) and eventually real Alveo U55C
+access, neither of which has been available in the environments this project has run
+in. See `docs/validation.md` for the exact gate-by-gate status.
 
 ## Layout
 
