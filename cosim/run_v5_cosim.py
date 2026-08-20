@@ -1,7 +1,9 @@
 """M2 cosim harness (V5, CLAUDE.md section 6, partial scope: free evolution only --
 the RWA drive term is not implemented in RTL yet, see rtl/src/free_evolution_engine.v).
 Builds the engine with Verilator, runs it for 10,000 steps from a random initial state,
-and compares the final state to the M0 golden model.
+and compares the final state to the M0 golden model, for every format in Q_FORMATS (not
+just the config default) so the real, RTL-verified picture of which formats actually
+clear the gate is on record, not just the software prediction from physics/fixed_point.py.
 
 Verilator stands in for Vivado xsim, which has not been available in any environment
 this project has run in -- CLAUDE.md section 4 names "Verilator/xsim" as the intended
@@ -11,6 +13,7 @@ Run: PYTHONPATH=. venv/bin/python cosim/run_v5_cosim.py
 """
 from __future__ import annotations
 
+import copy
 import json
 import subprocess
 from datetime import datetime, timezone
@@ -61,8 +64,14 @@ def build_sim() -> Path:
     return BUILD_DIR / "Vfree_evolution_engine"
 
 
-def run_cosim() -> dict[str, Any]:
+def run_cosim(format_name: str | None = None) -> dict[str, Any]:
+    """format_name overrides cfg['fixed_point']['format'] for sweeping; None uses the
+    config default (Q2.14)."""
     cfg = load_config()
+    if format_name is not None:
+        cfg = copy.deepcopy(cfg)
+        cfg["fixed_point"]["format"] = format_name
+
     N = cfg["numerics"]["fock_levels"]
     w01 = cfg["oscillator"]["w01"]
     dt = cfg["numerics"]["dt_s"]
@@ -70,8 +79,8 @@ def run_cosim() -> dict[str, Any]:
     int_bits, frac_bits = Q_FORMATS[format_name]
     data_width = int_bits + frac_bits
 
-    _, gen_data_width, gen_frac_bits, _ = generate_free_evolution_roms(cfg)
-    assert (gen_data_width, gen_frac_bits) == (data_width, frac_bits)
+    rom_params = generate_free_evolution_roms(cfg)
+    assert (rom_params["DATA_WIDTH"], rom_params["FRAC_BITS"]) == (data_width, frac_bits)
 
     sim_path = build_sim()
 
@@ -114,6 +123,8 @@ def run_cosim() -> dict[str, Any]:
         "n_steps": N_STEPS,
         "format": format_name,
         "N": N,
+        "rom_data_width": rom_params["ROM_DATA_WIDTH"],
+        "rom_frac_bits": rom_params["ROM_FRAC_BITS"],
         "infidelity": infid,
         "threshold": V5_INFIDELITY_THRESHOLD,
         "pass": infid < V5_INFIDELITY_THRESHOLD,
@@ -121,21 +132,28 @@ def run_cosim() -> dict[str, Any]:
 
 
 def main() -> None:
-    result = run_cosim()
+    results = [run_cosim(format_name=name) for name in Q_FORMATS]
+
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "scope": "free evolution only -- RWA drive term not yet in RTL",
         "note": (
             "V5 (CLAUDE.md section 6): RTL vs golden model, run via Verilator (not "
-            "Vivado xsim -- unavailable in this environment; see docs/validation.md)."
+            "Vivado xsim -- unavailable in this environment; see docs/validation.md). "
+            "ROM widened to rom_data_width bits (decoupled from the state format) after "
+            "the first V5 attempt found the dominant error source was the ROM's "
+            "quantized rotation angle, not per-step state rounding."
         ),
-        **result,
+        "config_default_format": load_config()["fixed_point"]["format"],
+        "results": results,
     }
     RESULTS_PATH.write_text(json.dumps(payload, indent=2) + "\n")
-    status = "PASS" if result["pass"] else "FAIL"
-    print(f"V5 (free evolution only): infidelity={result['infidelity']:.3e} "
-          f"threshold={V5_INFIDELITY_THRESHOLD:.0e} -> {status}")
-    print(f"Wrote {RESULTS_PATH}")
+
+    print(f"{'Format':<8} {'Infidelity':>14} {'Status':>6}")
+    for r in results:
+        status = "PASS" if r["pass"] else "FAIL"
+        print(f"{r['format']:<8} {r['infidelity']:>14.3e} {status:>6}")
+    print(f"\nWrote {RESULTS_PATH}")
 
 
 if __name__ == "__main__":

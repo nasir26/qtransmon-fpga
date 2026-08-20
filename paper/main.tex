@@ -389,12 +389,17 @@ golden model) pass under \texttt{physics/tests/}. V5 was run in reduced scope (f
 evolution only; the RWA drive term is not yet in RTL) via Verilator, standing in for
 Vivado xsim, which was not available in the environment this manuscript was drafted in
 --- CLAUDE.md's own repo layout names Verilator as an acceptable cosim tool alongside
-xsim. It currently fails: at $N=32$, $10^4$ steps, measured infidelity is $4.1\times
-10^{-2}$ at Q2.14 (the configured default) and $5.4\times10^{-3}$ at Q1.15, both far
-above the $10^{-4}$ gate, from a systematic per-step rotator-quantization error that
-compounds over the step count. A software-only re-sweep (same recurrence, not yet built
-in RTL) suggests roughly 20 fractional bits are needed, beyond any of the three 16-bit
-formats this section commits to --- see \texttt{docs/validation.md} for the full
+xsim. At $N=32$, $10^4$ steps, RTL-verified infidelity against the golden model is
+$6.3\times10^{-6}$ at Q1.15 (\textbf{PASS}), $3.6\times10^{-4}$ at Q2.14 --- the format
+this section's own default names --- and $2.1\times10^{-2}$ at Q4.12 (both FAIL). The
+gap was diagnosed before touching RTL: a systematic per-step rotator-quantization
+angular error compounding over the step count, fixed by storing the rotator ROM at a
+wider internal precision than the state format (32-bit, decoupled from the committed
+amplitude width, since it is a small fixed-size table and costs nothing to widen); what
+remains is each format's own state-storage width, a separate, harder floor that only
+Q1.15's 15 fractional bits clear at this step count. This is flagged, not silently
+resolved: the config default stays Q2.14 pending a decision on whether to adopt Q1.15
+instead, or accept a wider state format. See \texttt{docs/validation.md} for the full
 account. Everything else needs RTL/hardware not yet built, or the toolchain/hardware
 access this project has not had, and remains TBD rather than estimated.
 
@@ -409,7 +414,7 @@ V1  & Spectrum matches $\hbar\omega_{01}(n+\tfrac12)$ to $10^{-10}$ & PASS \\
 V2  & Free evolution preserves Fock populations exactly & PASS \\
 V3  & Coherent state follows the classical trajectory, $Q_M = 0$ & PASS \\
 V4  & Resonant drive gives $|\alpha(t)| = \Omega t/2$ & PASS \\
-V5  & RTL against golden, infidelity $< 10^{-4}$ at $10^4$ steps & FAIL$^\dagger$ \\
+V5  & RTL against golden, infidelity $< 10^{-4}$ at $10^4$ steps & PASS (Q1.15)$^\dagger$ \\
 V6  & Surrogate infidelity $< 10^{-3}$ on held-out trajectories & TBD \\
 V8  & Encoded free evolution exact to FP64 & TBD \\
 V9  & Constructions A and B agree with direct propagation & TBD \\
@@ -420,7 +425,9 @@ V13 & DRAG suppresses $|2\rangle$ leakage by $\ge 10\times$ & TBD \\
 \end{tabular}
 \end{table}
 
-$^\dagger$Reduced scope: free evolution only, at Q2.14; see text above.
+$^\dagger$Reduced scope (free evolution only, drive term not yet in RTL) and format-
+dependent: PASS at Q1.15, FAIL at Q2.14 (this section's stated default) and Q4.12; see
+text above and \texttt{docs/validation.md}.
 
 \subsection{Resource utilisation}
 

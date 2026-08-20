@@ -1,11 +1,38 @@
 {
-  "generated_at_utc": "2026-08-20T10:35:12.839693+00:00",
+  "generated_at_utc": "2026-08-20T10:55:50.954038+00:00",
   "scope": "free evolution only -- RWA drive term not yet in RTL",
-  "note": "V5 (CLAUDE.md section 6): RTL vs golden model, run via Verilator (not Vivado xsim -- unavailable in this environment; see docs/validation.md).",
-  "n_steps": 10000,
-  "format": "Q2.14",
-  "N": 32,
-  "infidelity": 0.04118837617210325,
-  "threshold": 0.0001,
-  "pass": false
+  "note": "V5 (CLAUDE.md section 6): RTL vs golden model, run via Verilator (not Vivado xsim -- unavailable in this environment; see docs/validation.md). ROM widened to rom_data_width bits (decoupled from the state format) after the first V5 attempt found the dominant error source was the ROM's quantized rotation angle, not per-step state rounding.",
+  "config_default_format": "Q2.14",
+  "results": [
+    {
+      "n_steps": 10000,
+      "format": "Q1.15",
+      "N": 32,
+      "rom_data_width": 32,
+      "rom_frac_bits": 31,
+      "infidelity": 6.294996074851511e-06,
+      "threshold": 0.0001,
+      "pass": true
+    },
+    {
+      "n_steps": 10000,
+      "format": "Q2.14",
+      "N": 32,
+      "rom_data_width": 32,
+      "rom_frac_bits": 31,
+      "infidelity": 0.0003647576584241419,
+      "threshold": 0.0001,
+      "pass": false
+    },
+    {
+      "n_steps": 10000,
+      "format": "Q4.12",
+      "N": 32,
+      "rom_data_width": 32,
+      "rom_frac_bits": 31,
+      "infidelity": 0.021379855017920724,
+      "threshold": 0.0001,
+      "pass": false
+    }
+  ]
 }

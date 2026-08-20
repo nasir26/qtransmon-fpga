@@ -37,11 +37,14 @@ See `CLAUDE.md` section 10.
 Milestones: see `CLAUDE.md` section 5. Current: **M1 passing, M2 in progress** (`lc`
 mode golden model, V1-V4 green under `physics/tests/`; Q1.15/Q2.14/Q4.12 fixed-point
 sweep at `bench/quantization/`; a real free-evolution RTL kernel + ROM generator +
-Verilator cosim harness at `rtl/`/`cosim/`, but V5 currently **fails** at every swept
-format — see `docs/validation.md` for the measured numbers and root cause).
-`transmon`/`duffing` remain gated to M11. Full RTL synthesis/timing and any hardware
-numbers still need Vivado/Vitis and eventually real Alveo U55C access, neither of which
-has been available in the environments this project has run in.
+Verilator cosim harness at `rtl/`/`cosim/` — V5 (free evolution only; the RWA drive
+term isn't in RTL yet) **passes at Q1.15** (6.3e-6) but **fails at Q2.14**, the format
+CLAUDE.md section 7 names as the default (3.6e-4), and at Q4.12 (2.1e-2) — see
+`docs/validation.md` for the measured numbers, root cause, and a flagged recommendation
+to reconsider the default format). `transmon`/`duffing` remain gated to M11. Full RTL
+synthesis/timing and any hardware numbers still need Vivado/Vitis and eventually real
+Alveo U55C access, neither of which has been available in the environments this project
+has run in.
 
 ## Layout
 
