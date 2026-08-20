@@ -30,11 +30,13 @@ or the rotating frame.
 
 ## Status
 
-Scaffold only. No results have been produced yet. Every table in `bench/` and every
-results cell in `paper/` is marked `TBD` until a run actually produces the number.
+No benchmark or fidelity results have been produced yet. Every table in `bench/` and
+every results cell in `paper/` is marked `TBD` until a run actually produces the number.
 See `CLAUDE.md` section 10.
 
-Milestones: see `CLAUDE.md` section 5. Current: **M0, not started.**
+Milestones: see `CLAUDE.md` section 5. Current: **M0 passing** (`lc` mode golden model,
+V1-V4 green under `physics/tests/`; `transmon`/`duffing` remain gated to M11). Next: M1
+(fixed-point Python model, Q-format sweep).
 
 ## Layout
 
