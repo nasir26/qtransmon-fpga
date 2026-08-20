@@ -1,0 +1,462 @@
+%% Journal of Supercomputing (Springer) submission
+%% Class: svjour3. Download from the Springer author portal and place svjour3.cls here.
+%% Compile: pdflatex main -> bibtex main -> pdflatex main x2
+%%
+%% STATUS: methodology complete, RESULTS ARE PLACEHOLDERS.
+%% Every cell marked TBD must be replaced by a number produced by an executed run
+%% before this manuscript is submitted anywhere. Do not submit with TBD present.
+
+\documentclass[smallextended]{svjour3}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\smartqed
+
+\journalname{The Journal of Supercomputing}
+
+\begin{document}
+
+\title{Structure-Exploiting FPGA Acceleration of Superconducting Qubit Hamiltonian
+Simulation: A Direct Bosonic Datapath Compared Against Gate-Based Circuit Encoding}
+
+\author{Nasir Ali}
+
+\institute{N. Ali \at
+           Embedded Systems Division, Centre for Development of Advanced Computing
+           (C-DAC), Noida, India \\
+           \email{TBD}}
+
+\date{Received: date / Accepted: date}
+
+\maketitle
+
+\begin{abstract}
+Design and calibration of superconducting quantum processors depends on repeated
+numerical solution of driven circuit Hamiltonians, and the inner loop of that workload
+is latency-bound rather than throughput-bound when it is placed inside a real-time
+control path. We present an embedded FPGA architecture for simulating the quantized
+LC oscillator and the driven transmon on a Xilinx Alveo U55C, organised around a
+structural observation: in their natural bases these Hamiltonians are diagonal plus
+bidiagonal (Fock basis) or tridiagonal (charge basis), so a time step costs $O(N)$
+rather than the $O(N^2)$ of a general matrix-vector product, and the entire truncated
+state fits in on-chip URAM for the truncations of practical interest. We describe a
+fully pipelined fixed-point datapath achieving initiation interval one, a build-time
+ROM generation flow that ties every coefficient to a physical parameter, and a
+quantization-aware machine-learned coarse-step propagator that replaces $K$ fine
+Trotter steps with one integer inference. We then implement the same physics a second
+way, as a gate-based quantum circuit executed on a native-Verilog FP64 statevector
+backend, using both a Pauli-decomposition Trotter construction and a quantum Fourier
+transform split-operator construction in which the Josephson nonlinearity reduces to a
+single diagonal phase oracle. The two routes are compared at matched accuracy across
+wall-clock latency, FPGA resource occupancy, and scaling in the number of coupled
+modes, establishing the crossover point at which digitized encoding becomes preferable
+to direct propagation.
+%% RESULTS SENTENCE: fill in once measured. Example shape, do NOT submit as written:
+%% "The direct datapath sustains TBD steps/s at TBD MHz using TBD DSPs, a TBDx
+%% reduction in per-step latency relative to a CPU reference at equal fidelity."
+\end{abstract}
+
+\keywords{FPGA acceleration \and Quantum simulation \and Superconducting qubits \and
+Transmon \and Embedded systems \and Fixed-point arithmetic \and Machine learning
+surrogate \and High-level synthesis}
+
+\section{Introduction}
+\label{sec:intro}
+
+Superconducting circuits are among the leading platforms for quantum computation, and
+their engineering workflow rests on numerical simulation of the underlying circuit
+Hamiltonian: extracting transition frequencies and anharmonicities from a proposed
+layout, shaping control pulses that suppress leakage out of the computational subspace,
+and predicting dispersive readout behaviour \cite{blais2021,krantz2019}. Most of this
+work is done offline on CPUs or GPUs, where throughput matters and latency does not.
+
+The situation changes when simulation moves inside a control loop. Real-time
+calibration, model-based feedback, and decoder-adjacent estimation all impose
+microsecond-scale or tighter deadlines, and at that point the relevant figure of merit
+is deterministic per-step latency rather than aggregate FLOPs. This is the regime in
+which field-programmable gate arrays are attractive, and it motivates the present work.
+
+Our starting point is the observation that the standard Hamiltonians of circuit quantum
+electrodynamics are extremely sparse in the bases in which they are naturally written,
+and that this sparsity is structural rather than incidental. Writing the LC oscillator
+in second-quantized form gives a purely diagonal Hamiltonian; the capacitively coupled
+drive is strictly bidiagonal; the Kerr nonlinearity of the Duffing reduction is again
+diagonal; and in the charge basis the Josephson cosine is exactly a shift operator, so
+the full transmon Hamiltonian is tridiagonal. A hardware datapath built around these
+facts performs $O(N)$ work per time step with all coefficients available from small
+on-chip read-only memories, and never needs to materialise a dense operator.
+
+We contribute the following.
+
+\begin{enumerate}
+\item A native-Verilog, fully pipelined fixed-point datapath for driven bosonic and
+transmon Hamiltonians on an Alveo U55C, with an initiation interval of one and the
+truncated state resident in on-chip memory, together with a systematic study of
+fixed-point word format against accumulated infidelity.
+\item A quantization-aware machine-learned coarse-step propagator, formulated so that
+unitarity is enforced structurally rather than by penalty, and evaluated honestly:
+we show that for the purely harmonic case the surrogate cannot beat the analytic
+propagator and is a methodology testbed only, and that its value appears in the
+nonlinear driven transmon regime where no closed form exists.
+\item A second, independent implementation of the same physics as a gate-based quantum
+circuit, comprising a Pauli-decomposition Trotter construction and a quantum Fourier
+transform split-operator construction, executed on an existing native-Verilog FP64
+statevector backend.
+\item A crossover analysis quantifying, at matched accuracy, the truncation size and
+mode count beyond which the digitized circuit route becomes preferable to direct
+propagation.
+\end{enumerate}
+
+Section~\ref{sec:background} fixes the physics and the numerical formulation.
+Section~\ref{sec:direct} describes the direct datapath.
+Section~\ref{sec:ml} covers the learned propagator.
+Section~\ref{sec:circuit} covers the circuit encodings.
+Section~\ref{sec:results} reports measurements and Section~\ref{sec:conclusion}
+concludes.
+
+\section{Related work}
+\label{sec:related}
+
+%% TODO: cite your own prior work here: the FPGA statevector simulator, the multi-FPGA
+%% distributed QFT work, and the HBM2 statevector distribution kernel patent.
+%% Placeholder keys are in references.bib and MUST be completed before submission.
+
+Work adjacent to this paper falls into three groups. The first is FPGA acceleration of
+quantum circuit simulation, where the dominant concern is the memory-bandwidth cost of
+applying gates to an exponentially large state vector, and where high-bandwidth memory
+has enabled qubit counts previously restricted to clusters \cite{prior_fpga_sim,
+prior_multifpga}. The second is classical simulation of circuit QED itself, typically
+in Python frameworks with dense or sparse linear algebra backends \cite{qutip}. The
+third is digital quantum simulation of continuous-variable and bosonic systems, whose
+theoretical foundations were established in the split-operator constructions of Wiesner
+and Zalka and the network formulations of Somma and coworkers \cite{wiesner1996,
+zalka1998, somma2002, lloyd1996}.
+
+The present work differs from all three in combining them: we treat the same
+Hamiltonian both as an analog-style state-vector propagation problem and as a digitized
+circuit, on the same device family, and compare them under a single accuracy metric.
+
+\section{Background and formulation}
+\label{sec:background}
+
+\subsection{From the circuit to the oscillator}
+
+For a lumped $LC$ resonator with node flux $\Phi$ and conjugate charge $Q$,
+\begin{equation}
+H = \frac{Q^2}{2C} + \frac{1}{2} C \omega_{01}^2 \Phi^2,
+\qquad
+\omega_{01} = \frac{1}{\sqrt{LC}},
+\qquad
+Z_0 = \sqrt{\frac{L}{C}} .
+\label{eq:lc}
+\end{equation}
+Promoting the conjugate pair to operators and introducing ladder operators through
+\begin{equation}
+\hat{Q} = i\sqrt{\frac{\hbar}{2 Z_0}}\left(\hat{a}^\dagger - \hat{a}\right),
+\qquad
+\hat{\Phi} = \sqrt{\frac{\hbar Z_0}{2}}\left(\hat{a}^\dagger + \hat{a}\right),
+\label{eq:ladder}
+\end{equation}
+reduces Eq.~\eqref{eq:lc} to
+\begin{equation}
+\hat{H} = \hbar \omega_{01}\left(\hat{a}^\dagger \hat{a} + \tfrac{1}{2}\right).
+\label{eq:sho}
+\end{equation}
+The equally spaced spectrum of Eq.~\eqref{eq:sho} is precisely what makes the bare
+resonator unusable as a qubit, and motivates the replacement of the linear inductor by
+a Josephson junction.
+
+\subsection{The transmon}
+
+With a junction of energy $E_J$ and charging energy $E_C = e^2/2C_\Sigma$,
+\begin{equation}
+\hat{H} = 4 E_C (\hat{n} - n_g)^2 - E_J \cos\hat{\phi},
+\qquad [\hat{\phi}, \hat{n}] = i,
+\label{eq:transmon}
+\end{equation}
+where $n_g$ is the offset charge \cite{koch2007}. In the charge basis truncated to
+$|n| \le n_{\max}$ the first term is diagonal and the cosine is exactly the shift
+operator,
+\begin{equation}
+\cos\hat{\phi} = \tfrac{1}{2}\sum_n \left( |n\rangle\langle n{+}1| +
+|n{+}1\rangle\langle n| \right),
+\label{eq:cosphi}
+\end{equation}
+so Eq.~\eqref{eq:transmon} is tridiagonal with constant off-diagonal $-E_J/2$. Expanding
+the cosine to quartic order gives the Duffing reduction
+\begin{equation}
+\hat{H} \simeq \hbar\omega_{01}\hat{a}^\dagger\hat{a}
++ \frac{\alpha}{2}\hat{a}^\dagger\hat{a}^\dagger\hat{a}\hat{a},
+\qquad
+\hbar\omega_{01} = \sqrt{8E_JE_C} - E_C,
+\qquad
+\hbar\alpha = -E_C .
+\label{eq:duffing}
+\end{equation}
+
+\subsection{Drive}
+
+The voltage source of the original circuit, coupled through a gate capacitance $C_d$,
+contributes $\hat{H}_d(t) = -(C_d/C_\Sigma) V(t) \hat{Q}$ with $V(t) = V_0\cos\omega_d t$.
+In the rotating frame and under the rotating-wave approximation this becomes
+\begin{equation}
+\hat{H} = \hbar\delta\,\hat{a}^\dagger\hat{a}
++ \frac{\hbar\Omega}{2}\left(\hat{a} + \hat{a}^\dagger\right),
+\qquad \delta = \omega_{01} - \omega_d .
+\label{eq:drive}
+\end{equation}
+Both the laboratory-frame and rotating-frame forms are implemented; the frame is a
+configuration option, not an assumption baked into the datapath.
+
+\subsection{Sparsity, and why it determines the architecture}
+
+In the Fock basis $\hat{a}|n\rangle = \sqrt{n}\,|n-1\rangle$ and
+$\hat{a}^\dagger|n\rangle = \sqrt{n+1}\,|n+1\rangle$. Consequently:
+Eq.~\eqref{eq:sho} is diagonal, Eq.~\eqref{eq:drive} is bidiagonal, the Kerr term of
+Eq.~\eqref{eq:duffing} is diagonal, and Eq.~\eqref{eq:transmon} in the charge basis is
+tridiagonal. Every operator application is therefore $O(N)$ with coefficients drawn from
+tables of $\sqrt{n}$ and $n(n-1)/2$. A further consequence is used throughout as a
+correctness oracle: evolution under the number operator alone is an exact diagonal phase
+rotation, leaving all Fock populations invariant.
+
+\subsection{Time discretisation}
+
+The baseline integrator is a second-order split-step,
+\begin{equation}
+U(\Delta t) \simeq
+e^{-i\hat{H}_{\text{diag}}\Delta t/2\hbar}\,
+e^{-i\hat{H}_{\text{drive}}\Delta t/\hbar}\,
+e^{-i\hat{H}_{\text{diag}}\Delta t/2\hbar},
+\label{eq:trotter}
+\end{equation}
+with a fourth-order Runge-Kutta path retained for cross-checking. Trotter error scaling
+follows the standard commutator bounds \cite{childs2021}.
+
+\section{Direct FPGA datapath}
+\label{sec:direct}
+
+\subsection{Architecture}
+
+%% TODO: replace with the as-built description and a block diagram once M2 closes.
+The kernel is written in native Verilog rather than generated through high-level
+synthesis, so that pipeline structure and memory partitioning are controlled explicitly.
+The truncated state vector is held in on-chip URAM and BRAM; for the truncations of
+interest ($N \le 64$) it does not approach HBM capacity, and HBM is reserved for
+streaming trajectory snapshots to the host and for feeding batched parameter sweeps.
+Coefficient tables are generated at build time from the configuration file, so that no
+constant in the bitstream is disconnected from a physical parameter.
+
+\subsection{Fixed-point format}
+
+Amplitudes are stored in a parameterised fixed-point format, swept over Q1.15, Q2.14 and
+Q4.12. Table~\ref{tab:fixedpoint} reports accumulated infidelity against the double
+precision golden model together with the resource cost of each choice.
+
+\begin{table}[t]
+\caption{Fixed-point format against accumulated infidelity and resource cost,
+$N = 32$, $10^4$ steps.}
+\label{tab:fixedpoint}
+\begin{tabular}{lcccc}
+\toprule
+Format & Infidelity & DSP & LUT & $f_{\max}$ (MHz) \\
+\midrule
+Q1.15 & TBD & TBD & TBD & TBD \\
+Q2.14 & TBD & TBD & TBD & TBD \\
+Q4.12 & TBD & TBD & TBD & TBD \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Parallel engines}
+
+$P$ independent oscillator engines are instantiated to serve parameter sweeps over drive
+amplitude and detuning, one trajectory per engine. Throughput in trajectories per second
+is reported in Section~\ref{sec:results}.
+
+\section{Learned coarse-step propagator}
+\label{sec:ml}
+
+\subsection{Formulation}
+
+We train a map $U_\theta$ taking a state and drive parameters to the state after
+$\Delta t = K\,\delta t$ with $K \ge 50$, so that a single inference replaces $K$
+applications of Eq.~\eqref{eq:trotter}. Two parameterisations are compared: direct
+prediction of the $2N$ real components of the propagated state, and prediction of an
+anti-Hermitian generator with the bidiagonal sparsity pattern of the true Hamiltonian,
+which enforces norm preservation structurally rather than through a penalty term. The
+training objective combines state infidelity with norm and energy-drift penalties.
+
+\subsection{Quantization}
+
+Weights are reduced to eight-bit integers and activations to sixteen bits through
+quantization-aware training. Fidelity loss attributable to quantization is reported
+separately from fidelity loss attributable to the surrogate approximation itself, since
+conflating them obscures which of the two limits deployment.
+
+\subsection{Scope of the claim}
+
+For the harmonic Hamiltonian of Eq.~\eqref{eq:sho} the exact propagator is a closed-form
+diagonal phase rotation, and no learned surrogate can improve on it. We therefore make
+no speedup claim in that regime and use it purely to validate the training and
+quantization pipeline against an exactly known answer. The operative claim concerns the
+driven transmon and Duffing systems of Eqs.~\eqref{eq:transmon} and~\eqref{eq:duffing},
+where no closed form exists, and it is stated at matched fidelity against the fixed-point
+Trotter datapath.
+
+\section{Gate-based circuit encoding}
+\label{sec:circuit}
+
+\subsection{Encoding}
+
+A $d$-level mode is mapped onto $m$ qubits. We compare a compact binary encoding with
+$d = 2^m$, a Gray-code encoding chosen to reduce the Pauli weight of the ladder
+operators, and a one-hot encoding used only as a debugging reference.
+
+\subsection{Construction A: Pauli decomposition and Trotter}
+
+The encoded Hamiltonian is decomposed into Pauli strings and compiled through
+CNOT-ladder and $R_Z$ blocks. In the binary encoding the number operator is
+\begin{equation}
+\hat{n} = \sum_{k=0}^{m-1} 2^k \frac{I - Z_k}{2},
+\label{eq:numberop}
+\end{equation}
+so evolution under Eq.~\eqref{eq:sho} is exact, carries no Trotter error, and costs
+exactly $m$ single-qubit $R_Z$ rotations. The diagonal Kerr term likewise compiles to
+$R_Z$ and $R_{ZZ}$ rotations only. All Trotter error in the harmonic case therefore
+originates in the drive term, which provides a sharp diagnostic.
+
+\subsection{Construction B: quantum Fourier transform split-operator}
+
+Charge and phase are conjugate, and on a truncated periodic charge lattice the
+transformation between them is the exact quantum Fourier transform rather than an
+approximation to it \cite{wiesner1996, zalka1998}. One step of the transmon evolution is
+therefore
+\begin{equation}
+U(\delta t) =
+\mathrm{QFT}^{-1}\,
+e^{\,i E_J \cos\hat{\phi}\,\delta t/\hbar}\,
+\mathrm{QFT}\,
+e^{-i 4 E_C \hat{n}^2 \delta t/\hbar},
+\label{eq:splitop}
+\end{equation}
+in which each exponential is diagonal in its own basis and compiles to $R_Z$ and
+controlled-phase rotations, and the entire Josephson nonlinearity is expressed as a
+single diagonal phase oracle. The quadratic term is expanded pairwise using
+Eq.~\eqref{eq:numberop}.
+
+\subsection{Backend}
+
+Circuits are executed on an existing native-Verilog FP64 statevector simulator for the
+Alveo U55C, exposed through a Qiskit \texttt{BackendV2} interface, supporting up to
+29 qubits across eight HBM channels. Every circuit is compiled to the backend's native
+gate basis, with the cost of any required decomposition recorded rather than assumed
+away.
+
+\subsection{Multi-mode extension}
+
+Adding a second mode with Jaynes-Cummings coupling
+$\hat{H}_{\text{int}} = \hbar g(\hat{a}^\dagger\hat{b} + \hat{a}\hat{b}^\dagger)$
+yields a transmon coupled to a readout resonator, from which the dispersive shift $\chi$
+is extracted and pointer-state separation observed. This is the regime in which the
+encoding overhead of the circuit route is expected to be repaid.
+
+\section{Results}
+\label{sec:results}
+
+%% ============================================================================
+%% NOTHING IN THIS SECTION HAS BEEN MEASURED YET.
+%% Do not populate any cell from an estimate, an extrapolation, or a prior project.
+%% Each number must come from a run whose log is committed under bench/.
+%% ============================================================================
+
+\subsection{Validation}
+
+Table~\ref{tab:validation} lists the acceptance gates and their status.
+
+\begin{table}[t]
+\caption{Validation gates.}
+\label{tab:validation}
+\begin{tabular}{clc}
+\toprule
+Gate & Criterion & Status \\
+\midrule
+V1  & Spectrum matches $\hbar\omega_{01}(n+\tfrac12)$ to $10^{-10}$ & TBD \\
+V2  & Free evolution preserves Fock populations exactly & TBD \\
+V3  & Coherent state follows the classical trajectory, $Q_M = 0$ & TBD \\
+V4  & Resonant drive gives $|\alpha(t)| = \Omega t/2$ & TBD \\
+V5  & RTL against golden, infidelity $< 10^{-4}$ at $10^4$ steps & TBD \\
+V6  & Surrogate infidelity $< 10^{-3}$ on held-out trajectories & TBD \\
+V8  & Encoded free evolution exact to FP64 & TBD \\
+V9  & Constructions A and B agree with direct propagation & TBD \\
+V10 & Trotter error exponent confirmed by fit & TBD \\
+V12 & $E_{01}$ within 1\% of $\sqrt{8E_JE_C} - E_C$ & TBD \\
+V13 & DRAG suppresses $|2\rangle$ leakage by $\ge 10\times$ & TBD \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Resource utilisation}
+
+\begin{table}[t]
+\caption{Resource utilisation by configuration on the Alveo U55C.}
+\label{tab:resources}
+\begin{tabular}{lccccccc}
+\toprule
+$N$ & Format & $P$ & ML & LUT & FF & DSP & BRAM/URAM \\
+\midrule
+32 & Q2.14 & 1  & off & TBD & TBD & TBD & TBD \\
+32 & Q2.14 & 1  & on  & TBD & TBD & TBD & TBD \\
+32 & Q2.14 & 8  & off & TBD & TBD & TBD & TBD \\
+64 & Q2.14 & 1  & off & TBD & TBD & TBD & TBD \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Crossover analysis}
+
+\begin{table}[t]
+\caption{Direct datapath against circuit encoding at matched infidelity.}
+\label{tab:crossover}
+\begin{tabular}{lccccc}
+\toprule
+Route & Qubits & Depth & 2Q gates & Latency/step & Infidelity \\
+\midrule
+Direct bosonic datapath      & --- & --- & --- & TBD & TBD \\
+Construction A (Pauli/Trotter) & TBD & TBD & TBD & TBD & TBD \\
+Construction B (QFT split-op)  & TBD & TBD & TBD & TBD & TBD \\
+CPU reference (QuTiP)          & --- & --- & --- & TBD & TBD \\
+GPU reference                  & --- & --- & --- & TBD & TBD \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Discussion}
+
+%% Write only after the tables above are filled. If the circuit route loses for a
+%% single mode, report that plainly and locate the mode count at which it wins.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+%% Write last.
+
+\begin{acknowledgements}
+%% TODO: National Quantum Mission / MeitY acknowledgement text, and colleagues.
+\end{acknowledgements}
+
+\section*{Declarations}
+
+\textbf{Funding.} TBD.
+\textbf{Conflict of interest.} The author declares no competing interests.
+\textbf{Data availability.} All source code, testbenches, and benchmark logs are
+available at \url{https://github.com/nasir26/qtransmon-fpga}.
+
+\bibliographystyle{spmpsci}
+\bibliography{references}
+
+\end{document}
