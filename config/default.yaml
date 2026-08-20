@@ -1,0 +1,40 @@
+# Single source of truth for physical parameters.
+# Every constant in RTL, Python, and generated ROMs derives from this file.
+# See CLAUDE.md sections 2 and 7.
+
+mode: lc            # lc | transmon | duffing
+frame: rotating     # lab | rotating
+
+oscillator:
+  w01_over_2pi_Hz: 5.0e9
+  Z0_ohm: 50.0
+
+transmon:
+  EJ_over_EC: 60.0
+  EC_over_h_Hz: 250.0e6
+  n_g: 0.0
+  n_max: 20
+
+drive:
+  Omega_over_2pi_Hz: 50.0e6
+  detuning_over_2pi_Hz: 0.0
+  shape: gaussian   # gaussian | drag | square
+
+numerics:
+  fock_levels: 32       # 8 | 16 | 32 | 64
+  dt_s: 1.0e-12
+  integrator: trotter2  # trotter1 | trotter2 | rk4
+  truncation_guard: 1.0e-6
+
+fixed_point:
+  format: Q2.14         # Q1.15 | Q2.14 | Q4.12
+
+fpga:
+  device: xilinx_u55c
+  parallel_engines: 1
+  state_memory: uram    # never hbm for N <= 64
+
+open_system:
+  enabled: false
+  kappa_Hz: 0.0
+  gamma_phi_Hz: 0.0

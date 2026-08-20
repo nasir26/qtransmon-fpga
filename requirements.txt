@@ -1,0 +1,8 @@
+numpy>=1.26
+scipy>=1.11
+qutip>=5.0
+qiskit>=1.1
+torch>=2.2
+pyyaml>=6.0
+matplotlib>=3.8
+pytest>=8.0
