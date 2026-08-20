@@ -29,6 +29,12 @@ _x/
 *.xo
 *.ltx
 
+# Verilator cosim build/run artifacts (rebuilt each run; only the JSON result log is
+# committed, see cosim/run_v5_cosim.py)
+cosim/obj_dir/
+cosim/state_in_*.hex
+cosim/state_out_*.hex
+
 # artifacts
 data/*.npz
 data/*.npy

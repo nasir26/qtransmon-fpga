@@ -1,0 +1,11 @@
+{
+  "generated_at_utc": "2026-08-20T10:35:12.839693+00:00",
+  "scope": "free evolution only -- RWA drive term not yet in RTL",
+  "note": "V5 (CLAUDE.md section 6): RTL vs golden model, run via Verilator (not Vivado xsim -- unavailable in this environment; see docs/validation.md).",
+  "n_steps": 10000,
+  "format": "Q2.14",
+  "N": 32,
+  "infidelity": 0.04118837617210325,
+  "threshold": 0.0001,
+  "pass": false
+}

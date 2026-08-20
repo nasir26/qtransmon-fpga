@@ -385,9 +385,18 @@ encoding overhead of the circuit route is expected to be repaid.
 \subsection{Validation}
 
 Table~\ref{tab:validation} lists the acceptance gates and their status. V1-V4 (the M0
-golden model) pass under \texttt{physics/tests/}; V5 onward require the RTL/hardware
-toolchain (Vivado xsim, and eventually the Alveo U55C itself), which was not available
-in the environment this manuscript was drafted in, and remain TBD rather than estimated.
+golden model) pass under \texttt{physics/tests/}. V5 was run in reduced scope (free
+evolution only; the RWA drive term is not yet in RTL) via Verilator, standing in for
+Vivado xsim, which was not available in the environment this manuscript was drafted in
+--- CLAUDE.md's own repo layout names Verilator as an acceptable cosim tool alongside
+xsim. It currently fails: at $N=32$, $10^4$ steps, measured infidelity is $4.1\times
+10^{-2}$ at Q2.14 (the configured default) and $5.4\times10^{-3}$ at Q1.15, both far
+above the $10^{-4}$ gate, from a systematic per-step rotator-quantization error that
+compounds over the step count. A software-only re-sweep (same recurrence, not yet built
+in RTL) suggests roughly 20 fractional bits are needed, beyond any of the three 16-bit
+formats this section commits to --- see \texttt{docs/validation.md} for the full
+account. Everything else needs RTL/hardware not yet built, or the toolchain/hardware
+access this project has not had, and remains TBD rather than estimated.
 
 \begin{table}[t]
 \caption{Validation gates.}
@@ -400,7 +409,7 @@ V1  & Spectrum matches $\hbar\omega_{01}(n+\tfrac12)$ to $10^{-10}$ & PASS \\
 V2  & Free evolution preserves Fock populations exactly & PASS \\
 V3  & Coherent state follows the classical trajectory, $Q_M = 0$ & PASS \\
 V4  & Resonant drive gives $|\alpha(t)| = \Omega t/2$ & PASS \\
-V5  & RTL against golden, infidelity $< 10^{-4}$ at $10^4$ steps & TBD \\
+V5  & RTL against golden, infidelity $< 10^{-4}$ at $10^4$ steps & FAIL$^\dagger$ \\
 V6  & Surrogate infidelity $< 10^{-3}$ on held-out trajectories & TBD \\
 V8  & Encoded free evolution exact to FP64 & TBD \\
 V9  & Constructions A and B agree with direct propagation & TBD \\
@@ -410,6 +419,8 @@ V13 & DRAG suppresses $|2\rangle$ leakage by $\ge 10\times$ & TBD \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+$^\dagger$Reduced scope: free evolution only, at Q2.14; see text above.
 
 \subsection{Resource utilisation}
 
